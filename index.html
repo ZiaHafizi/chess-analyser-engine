@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Analysis Board</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Custom Styles for Highlights and Arrows */
+        .highlight-best-move {
+            box-shadow: inset 0 0 3px 3px yellow;
+            background-color: rgba(255, 255, 0, 0.5);
+        }
+        .highlight-last-move {
+            background-color: rgba(155, 199, 0, 0.41);
+        }
+        .highlight-selected {
+            box-shadow: inset 0 0 3px 3px #60a5fa;
+            background-color: rgba(96, 165, 250, 0.5);
+        }
+
+        /* Move Hint Markers */
+        .move-hint-marker {
+            position: absolute;
+            width: 30%;
+            height: 30%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.15);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10;
+            transition: all 0.15s ease;
+        }
+        .capture-hint {
+            width: 90%;
+            height: 90%;
+            background-color: transparent;
+            border: 5px solid rgba(0, 0, 0, 0.15);
+            border-radius: 50%;
+        }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            flex-direction: column;
+        }
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #333;
+            border-top-color: #22c55e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Board Container */
+        #board-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            aspect-ratio: 1 / 1; 
+            min-height: 300px;
+        }
+        
+        /* Arrow Overlay (Canvas) */
+        #board-wrapper {
+            position: relative;
+            max-width: 600px;
+            margin: 0 auto;
+            min-height: 300px;
+        }
+        canvas#arrow-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* Evaluation Bar */
+        #eval-bar-container {
+            width: 24px;
+            height: 100%;
+            background: linear-gradient(to bottom, #1a1a1a 50%, #f0f0f0 50%);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+            border: 2px solid #404040;
+        }
+        #eval-bar-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: #f0f0f0;
+            transition: height 0.5s ease-out;
+        }
+        #eval-bar-marker {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #ef4444;
+            transform: translateY(50%);
+            transition: bottom 0.5s ease-out;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        }
+
+        /* Move History */
+        #move-history {
+            max-height: 200px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #4b5563 #1f2937;
+        }
+        #move-history::-webkit-scrollbar {
+            width: 6px;
+        }
+        #move-history::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        #move-history::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+            border-radius: 3px;
+        }
+        .move-entry {
+            display: inline-block;
+            padding: 2px 6px;
+            margin: 1px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .move-entry:hover {
+            background-color: #374151;
+        }
+        .move-entry.active {
+            background-color: #22c55e;
+            color: #000;
+        }
+        .move-number {
+            color: #6b7280;
+            margin-right: 4px;
+        }
+
+        /* --- EMBEDDED CHESSBOARD CSS --- */
+        .clearfix-7da63 { clear: both; }
+        .board-b72b1 {
+            border: 2px solid #404040;
+            box-sizing: content-box;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .square-55d63 {
+            float: left;
+            position: relative;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            transition: background-color 0.15s ease;
+        }
+        .white-1e1d7 {
+            background-color: #eeeed2;
+            color: #769656;
+        }
+        .black-3c85d {
+            background-color: #769656;
+            color: #eeeed2;
+        }
+        .highlight1-32417, .highlight2-9c5d2 {
+            box-shadow: inset 0 0 3px 3px yellow;
+        }
+        .notation-322f9 {
+            cursor: default;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            position: absolute;
+        }
+        .alpha-d2270 {
+            bottom: 1px;
+            right: 3px;
+        }
+        .numeric-fc462 {
+            top: 2px;
+            left: 2px;
+        }
+        .square-55d63 img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        /* Button Animations */
+        .btn-game {
+            transition: all 0.2s ease;
+        }
+        .btn-game:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .btn-game:active {
+            transform: translateY(0);
+        }
+
+        /* Pulse animation for check */
+        @keyframes pulse-check {
+            0%, 100% { box-shadow: inset 0 0 8px 4px rgba(239, 68, 68, 0.8); }
+            50% { box-shadow: inset 0 0 16px 8px rgba(239, 68, 68, 1); }
+        }
+        .in-check {
+            animation: pulse-check 0.8s ease-in-out infinite;
+        }
+
+        /* Game Over Overlay */
+        #game-over-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.75);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            border-radius: 4px;
+            backdrop-filter: blur(4px);
+        }
+        #game-over-overlay.show {
+            display: flex;
+        }
+
+        /* Background pattern */
+        body {
+            background-image: 
+                radial-gradient(circle at 25% 25%, rgba(34, 197, 94, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(59, 130, 246, 0.03) 0%, transparent 50%);
+        }
+
+        /* Depth selector styling */
+        #depth-selector {
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            padding-right: 28px;
+        }
+        #depth-selector:hover {
+            border-color: #22c55e;
+        }
+
+        /* Keyboard hint styling */
+        kbd {
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+
+        /* Best move button pulse when available */
+        @keyframes pulse-best {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+        }
+        #btn-best-move.has-move {
+            animation: pulse-best 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center py-8">
+
+    <div id="loading-overlay">
+        <div class="loader"></div>
+        <div class="text-2xl font-bold mb-2">Loading Stockfish Engine...</div>
+        <div class="text-sm opacity-75 mb-4">Please wait while the engine initializes.</div>
+        <button onclick="document.getElementById('loading-overlay').style.display='none'" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm border border-gray-500 transition">
+            Skip / Play Offline
+        </button>
+    </div>
+
+    <header class="mb-6 text-center">
+        <h1 class="text-4xl font-bold text-white mb-2 drop-shadow-lg">♟️ Chess Analysis Board</h1>
+        <p class="text-gray-400">Play both sides. Stockfish shows the best move with arrows.</p>
+        <div class="flex flex-wrap justify-center gap-3 mt-3 text-xs">
+            <span class="bg-gray-800 px-3 py-1 rounded-full text-gray-400 border border-gray-700">
+                <kbd class="text-green-400 font-bold">B</kbd> Play best move
+            </span>
+            <span class="bg-gray-800 px-3 py-1 rounded-full text-gray-400 border border-gray-700">
+                <kbd class="text-yellow-400 font-bold">←</kbd> <kbd class="text-yellow-400 font-bold">→</kbd> Navigate
+            </span>
+            <span class="bg-gray-800 px-3 py-1 rounded-full text-gray-400 border border-gray-700">
+                <kbd class="text-blue-400 font-bold">R</kbd> Redo move
+            </span>
+        </div>
+    </header>
+
+    <main class="w-full px-4 flex flex-col items-center gap-6">
+        
+        <!-- Status Panel -->
+        <div class="w-full bg-gradient-to-r from-gray-800 via-gray-750 to-gray-800 p-4 rounded-xl shadow-2xl border border-gray-700" style="max-width: 650px;">
+            <div class="flex justify-between items-center">
+                <div class="bg-gray-900/50 px-4 py-2 rounded-lg">
+                    <span class="text-gray-500 text-xs uppercase tracking-wider block">Turn</span>
+                    <span id="turn-display" class="font-bold text-lg text-white">White</span>
+                </div>
+                
+                <!-- Depth Selector -->
+                <div class="flex items-center gap-3">
+                    <div class="bg-gray-900/50 px-3 py-2 rounded-lg">
+                        <label class="text-gray-500 text-xs uppercase tracking-wider block mb-1">Depth</label>
+                        <select id="depth-selector" class="bg-gray-700 text-white text-sm font-bold px-2 py-1 rounded border border-gray-600 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500">
+                            <option value="8">8 (Fast)</option>
+                            <option value="10" selected>10</option>
+                            <option value="12">12</option>
+                            <option value="14">14</option>
+                            <option value="16">16 (Slow)</option>
+                            <option value="18">18 (Very Slow)</option>
+                        </select>
+                    </div>
+                    <div id="sound-toggle" class="cursor-pointer text-2xl hover:scale-110 transition-transform" title="Toggle Sound">🔊</div>
+                </div>
+                
+                <div class="bg-gray-900/50 px-4 py-2 rounded-lg text-right">
+                    <span class="text-gray-500 text-xs uppercase tracking-wider block">Evaluation</span>
+                    <span id="eval-display" class="font-mono text-yellow-400 text-lg font-bold">Initializing...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Board Area with Eval Bar -->
+        <div class="relative p-4 rounded-2xl bg-gradient-to-br from-gray-800 via-gray-850 to-gray-900 shadow-2xl border border-gray-700" style="max-width: 680px;">
+            <!-- Decorative corners -->
+            <div class="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-green-500/50 rounded-tl"></div>
+            <div class="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-green-500/50 rounded-tr"></div>
+            <div class="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-green-500/50 rounded-bl"></div>
+            <div class="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-green-500/50 rounded-br"></div>
+            
+            <div class="flex gap-3 items-stretch">
+                <!-- Eval Bar -->
+                <div id="eval-bar-container" class="hidden md:block">
+                    <div id="eval-bar-fill" style="height: 50%;"></div>
+                    <div id="eval-bar-marker" style="bottom: 50%;"></div>
+                </div>
+                
+                <!-- Board -->
+                <div id="board-wrapper">
+                    <div id="board-container"></div>
+                    <canvas id="arrow-layer"></canvas>
+                    <div id="game-over-overlay">
+                        <div class="text-center bg-gray-900/90 p-8 rounded-xl border border-gray-600 shadow-2xl">
+                            <div id="game-over-text" class="text-3xl font-bold mb-4 text-white">Game Over</div>
+                            <button onclick="resetGame()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-8 rounded-lg transition shadow-lg hover:shadow-green-500/25">
+                                🔄 New Game
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex flex-wrap gap-2 justify-center p-3 bg-gray-800/50 rounded-xl border border-gray-700" style="max-width: 650px; width: 100%;">
+            <button id="btn-reset" class="btn-game bg-gradient-to-b from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold py-2.5 px-4 rounded-lg flex-1 min-w-[90px] border border-red-500/30 shadow-lg">
+                🔄 Reset
+            </button>
+            <button id="btn-flip" class="btn-game bg-gradient-to-b from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 text-white font-bold py-2.5 px-4 rounded-lg flex-1 min-w-[90px] border border-gray-500/30 shadow-lg">
+                🔃 Flip
+            </button>
+            <button id="btn-undo" class="btn-game bg-gradient-to-b from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 text-white font-bold py-2.5 px-4 rounded-lg flex-1 min-w-[90px] border border-gray-500/30 shadow-lg">
+                ↩️ Undo
+            </button>
+            <button id="btn-redo" class="btn-game bg-gradient-to-b from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 text-white font-bold py-2.5 px-4 rounded-lg flex-1 min-w-[90px] border border-gray-500/30 shadow-lg" title="Press R">
+                ↪️ Redo
+            </button>
+            <button id="btn-best-move" class="btn-game bg-gradient-to-b from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-bold py-2.5 px-4 rounded-lg flex-1 min-w-[90px] border border-green-500/30 shadow-lg" title="Press B">
+                ⚡ Best
+            </button>
+            <button id="btn-copy-pgn" class="btn-game bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-2.5 px-4 rounded-lg flex-1 min-w-[90px] border border-blue-500/30 shadow-lg">
+                📋 PGN
+            </button>
+        </div>
+
+        <!-- Move History -->
+        <div class="bg-gradient-to-b from-gray-800 to-gray-850 p-4 rounded-xl shadow-xl border border-gray-700 w-full" style="max-width: 650px;">
+            <div class="flex justify-between items-center mb-3">
+                <span class="text-gray-300 text-sm font-semibold flex items-center gap-2">
+                    <span class="text-green-400">📜</span> Move History
+                </span>
+                <span id="move-count" class="text-gray-500 text-xs bg-gray-900 px-2 py-1 rounded">0 moves</span>
+            </div>
+            <div id="move-history" class="text-sm font-mono min-h-[40px] bg-gray-900/50 p-2 rounded-lg">
+                <span class="text-gray-500 italic">No moves yet</span>
+            </div>
+        </div>
+        
+        <!-- Engine Details -->
+        <div class="bg-gradient-to-b from-gray-800 to-gray-850 p-4 rounded-xl shadow-xl border border-gray-700 w-full text-sm" style="max-width: 650px;">
+            <div class="flex justify-between items-center mb-3">
+                <span class="text-gray-300 text-sm font-semibold flex items-center gap-2">
+                    <span class="text-yellow-400">🔧</span> Engine Log
+                </span>
+                <button id="btn-clear-log" class="text-xs text-gray-500 hover:text-gray-300 bg-gray-900 px-2 py-1 rounded hover:bg-gray-700 transition">Clear</button>
+            </div>
+            <div class="h-20 overflow-y-auto text-xs font-mono text-gray-400 bg-gray-900/50 p-2 rounded-lg" id="engine-log">
+                <!-- Engine logs will appear here -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+    <script>
+        // Audio Context for Sounds
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+        let soundEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new AudioContext();
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled || !audioCtx) return;
+            
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            switch(type) {
+                case 'move':
+                    oscillator.frequency.value = 400;
+                    oscillator.type = 'sine';
+                    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                    oscillator.start(audioCtx.currentTime);
+                    oscillator.stop(audioCtx.currentTime + 0.1);
+                    break;
+                case 'capture':
+                    oscillator.frequency.value = 200;
+                    oscillator.type = 'sawtooth';
+                    gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                    oscillator.start(audioCtx.currentTime);
+                    oscillator.stop(audioCtx.currentTime + 0.15);
+                    break;
+                case 'check':
+                    oscillator.frequency.value = 600;
+                    oscillator.type = 'square';
+                    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                    oscillator.start(audioCtx.currentTime);
+                    oscillator.stop(audioCtx.currentTime + 0.2);
+                    break;
+                case 'gameover':
+                    oscillator.frequency.value = 300;
+                    oscillator.type = 'triangle';
+                    gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.5);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                    oscillator.start(audioCtx.currentTime);
+                    oscillator.stop(audioCtx.currentTime + 0.5);
+                    break;
+            }
+        }
+
+        // Global Error Handler
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error("Global Error:", message);
+            logMessage("Error: " + message, '#ff6b6b');
+        };
+
+        // --- Game State & Variables ---
+        let board = null;
+        let game = null;
+        let stockfish = null;
+        let engineStatus = {
+            initialized: false,
+            searching: false
+        };
+        let bestMove = null;
+        let selectedSquare = null;
+        let moveHistory = [];
+        let currentMoveIndex = -1;
+        let lastMove = null;
+        
+        // --- Initialization ---
+        $(document).ready(function() {
+            if (typeof Chess === 'undefined' || typeof Chessboard === 'undefined') {
+                alert("Critical libraries failed to load. Please check your internet connection and reload.");
+                return;
+            }
+            
+            try {
+                game = new Chess();
+            } catch (e) {
+                console.error("Failed to create Chess instance:", e);
+                alert("Game logic failed to initialize.");
+                return;
+            }
+
+            initBoard();
+            initStockfish();
+            
+            // Event Listeners
+            $('#btn-reset').on('click', resetGame);
+            $('#btn-flip').on('click', function() { 
+                if (board) board.flip(); 
+                setTimeout(drawBestMoveArrow, 250); 
+            });
+            $('#btn-undo').on('click', undoMove);
+            $('#btn-redo').on('click', redoMove);
+            $('#btn-best-move').on('click', playBestMove);
+            $('#btn-copy-pgn').on('click', copyPGN);
+            $('#btn-clear-log').on('click', function() {
+                $('#engine-log').empty();
+            });
+            $('#sound-toggle').on('click', function() {
+                initAudio();
+                soundEnabled = !soundEnabled;
+                $(this).text(soundEnabled ? '🔊' : '🔇');
+            });
+            
+            // Keyboard shortcuts
+            $(document).on('keydown', function(e) {
+                // Ignore if typing in an input field
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+                
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    undoMove();
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    redoMove();
+                } else if (e.key === 'b' || e.key === 'B') {
+                    e.preventDefault();
+                    playBestMove();
+                } else if (e.key === 'r' || e.key === 'R') {
+                    e.preventDefault();
+                    redoMove();
+                }
+            });
+            
+            // Depth selector change handler
+            $('#depth-selector').on('change', function() {
+                analyzePosition();
+            });
+            
+            // Handle Window Resize for Canvas
+            window.addEventListener('resize', () => {
+                if (board) board.resize();
+                requestAnimationFrame(drawBestMoveArrow);
+            });
+
+            // Initialize audio on first click
+            $(document).one('click', initAudio);
+        });
+
+        function initBoard() {
+            const config = {
+                draggable: true,
+                position: 'start',
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd,
+                pieceTheme: 'https://raw.githubusercontent.com/oakmac/chessboardjs/master/website/img/chesspieces/wikipedia/{piece}.png'
+            };
+            try {
+                board = Chessboard('board-container', config);
+                updateStatus();
+                setTimeout(board.resize, 200);
+                
+                setTimeout(() => {
+                    if ($('#board-container').height() < 10) {
+                        console.warn("Board seems collapsed, triggering resize...");
+                        board.resize();
+                    }
+                }, 1000);
+                
+                $('#board-container').on('click', '[data-square]', handleSquareClick);
+
+            } catch (e) {
+                console.error("Error creating chessboard:", e);
+                alert("Error loading chessboard library. Please check your internet connection.");
+            }
+        }
+
+        async function initStockfish() {
+            try {
+                const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');
+                const scriptContent = await response.text();
+                const blob = new Blob([scriptContent], { type: 'application/javascript' });
+                const workerUrl = URL.createObjectURL(blob);
+                
+                stockfish = new Worker(workerUrl);
+                
+                stockfish.onmessage = function(event) {
+                    handleEngineMessage(event.data);
+                };
+                
+                stockfish.postMessage('uci');
+                
+            } catch (error) {
+                console.error("Failed to load Stockfish:", error);
+                logMessage("Failed to load Stockfish engine. You can still play manually.", '#ff6b6b');
+                $('#loading-overlay').hide();
+            }
+        }
+
+        function logMessage(text, color = '#9ca3af') {
+            const logEl = document.getElementById('engine-log');
+            const p = document.createElement('div');
+            p.textContent = text;
+            p.style.color = color;
+            logEl.prepend(p);
+            if(logEl.children.length > 30) logEl.removeChild(logEl.lastChild);
+        }
+
+        // --- Chess Logic ---
+        
+        function onDragStart(source, piece, position, orientation) {
+            if (game.game_over()) return false;
+            
+            if (selectedSquare) {
+                selectedSquare = null;
+                $('#board-container .square-55d63').removeClass('highlight-selected');
+                removeMoveHints();
+            }
+
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+                (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+                return false;
+            }
+        }
+
+        function onDrop(source, target) {
+            const move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q'
+            });
+
+            if (move === null) return 'snapback';
+
+            // Truncate future moves if we branched
+            if (currentMoveIndex < moveHistory.length - 1) {
+                moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+            }
+            
+            moveHistory.push(move);
+            currentMoveIndex = moveHistory.length - 1;
+            lastMove = { from: source, to: target };
+            
+            // Play sound
+            if (move.captured) {
+                playSound('capture');
+            } else {
+                playSound('move');
+            }
+            
+            if (game.in_check()) {
+                playSound('check');
+            }
+
+            updateStatus();
+            updateMoveHistory();
+            highlightLastMove();
+            analyzePosition();
+        }
+
+        function onSnapEnd() {
+            board.position(game.fen());
+        }
+
+        // --- Click-to-Move Logic ---
+        
+        function removeMoveHints() {
+            $('.move-hint-marker').remove();
+        }
+
+        function showMoveHints(square) {
+            const moves = game.moves({
+                square: square,
+                verbose: true
+            });
+
+            if (moves.length === 0) return;
+
+            moves.forEach(function(move) {
+                const squareEl = $('#board-container .square-55d63[data-square="' + move.to + '"]');
+                
+                const dot = document.createElement('div');
+                dot.classList.add('move-hint-marker');
+                
+                if (move.flags.includes('c') || move.flags.includes('e')) {
+                    dot.classList.add('capture-hint');
+                }
+
+                squareEl.append(dot);
+            });
+        }
+
+        function handleSquareClick(evt) {
+            initAudio();
+            const square = $(this).attr('data-square');
+            const piece = game.get(square);
+            const turn = game.turn();
+
+            if (selectedSquare) {
+                const move = game.move({
+                    from: selectedSquare,
+                    to: square,
+                    promotion: 'q'
+                });
+
+                if (move !== null) {
+                    board.position(game.fen());
+                    
+                    // Truncate future moves if we branched
+                    if (currentMoveIndex < moveHistory.length - 1) {
+                        moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+                    }
+                    
+                    moveHistory.push(move);
+                    currentMoveIndex = moveHistory.length - 1;
+                    lastMove = { from: selectedSquare, to: square };
+                    
+                    if (move.captured) {
+                        playSound('capture');
+                    } else {
+                        playSound('move');
+                    }
+                    
+                    if (game.in_check()) {
+                        playSound('check');
+                    }
+                    
+                    removeMoveHints();
+                    $('#board-container .square-55d63').removeClass('highlight-selected');
+                    selectedSquare = null;
+                    
+                    updateStatus();
+                    updateMoveHistory();
+                    highlightLastMove();
+                    analyzePosition();
+                } else {
+                    if (piece && (
+                        (turn === 'w' && piece.color === 'w') ||
+                        (turn === 'b' && piece.color === 'b')
+                    )) {
+                        removeMoveHints();
+                        $('#board-container .square-55d63').removeClass('highlight-selected');
+                        
+                        selectedSquare = square;
+                        $(this).addClass('highlight-selected');
+                        showMoveHints(square);
+                    } else {
+                        removeMoveHints();
+                        $('#board-container .square-55d63').removeClass('highlight-selected');
+                        selectedSquare = null;
+                    }
+                }
+                return;
+            }
+
+            if (piece) {
+                if ((turn === 'w' && piece.color === 'w') ||
+                    (turn === 'b' && piece.color === 'b')) {
+                    
+                    selectedSquare = square;
+                    $(this).addClass('highlight-selected');
+                    showMoveHints(square);
+                }
+            }
+        }
+
+        function highlightLastMove() {
+            $('#board-container .square-55d63').removeClass('highlight-last-move in-check');
+            
+            if (lastMove) {
+                $(`#board-container .square-55d63[data-square="${lastMove.from}"]`).addClass('highlight-last-move');
+                $(`#board-container .square-55d63[data-square="${lastMove.to}"]`).addClass('highlight-last-move');
+            }
+            
+            // Highlight king if in check
+            if (game.in_check()) {
+                const turn = game.turn();
+                const board_state = game.board();
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        const piece = board_state[r][c];
+                        if (piece && piece.type === 'k' && piece.color === turn) {
+                            const file = String.fromCharCode(97 + c);
+                            const rank = 8 - r;
+                            $(`#board-container .square-55d63[data-square="${file}${rank}"]`).addClass('in-check');
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateMoveHistory() {
+            const historyEl = $('#move-history');
+            historyEl.empty();
+            
+            if (moveHistory.length === 0) {
+                historyEl.html('<span class="text-gray-500 italic">No moves yet</span>');
+                $('#move-count').text('0 moves');
+                return;
+            }
+            
+            let html = '';
+            for (let i = 0; i < moveHistory.length; i++) {
+                if (i % 2 === 0) {
+                    html += `<span class="move-number">${Math.floor(i/2) + 1}.</span>`;
+                }
+                const isActive = i === currentMoveIndex ? 'active' : '';
+                html += `<span class="move-entry ${isActive}" data-index="${i}">${moveHistory[i].san}</span>`;
+            }
+            
+            historyEl.html(html);
+            $('#move-count').text(`${moveHistory.length} move${moveHistory.length !== 1 ? 's' : ''}`);
+            
+            // Add click handlers for move navigation
+            $('.move-entry').on('click', function() {
+                const index = parseInt($(this).data('index'));
+                goToMove(index);
+            });
+        }
+
+        function goToMove(index) {
+            game.reset();
+            lastMove = null;
+            
+            for (let i = 0; i <= index; i++) {
+                const move = moveHistory[i];
+                game.move(move);
+                lastMove = { from: move.from, to: move.to };
+            }
+            
+            currentMoveIndex = index;
+            board.position(game.fen());
+            updateStatus();
+            updateMoveHistory();
+            highlightLastMove();
+            analyzePosition();
+        }
+
+        function resetGame() {
+            game.reset();
+            board.start();
+            selectedSquare = null;
+            moveHistory = [];
+            currentMoveIndex = -1;
+            lastMove = null;
+            $('#board-container .square-55d63').removeClass('highlight-selected highlight-last-move in-check');
+            removeMoveHints();
+            updateStatus();
+            updateMoveHistory();
+            analyzePosition();
+            clearArrow();
+            updateEvalBar(0);
+            $('#game-over-overlay').removeClass('show');
+        }
+
+        function undoMove() {
+            if (currentMoveIndex < 0) return;
+            
+            if (currentMoveIndex === 0) {
+                game.reset();
+                lastMove = null;
+                currentMoveIndex = -1;
+            } else {
+                goToMove(currentMoveIndex - 1);
+                return;
+            }
+            
+            board.position(game.fen());
+            updateStatus();
+            updateMoveHistory();
+            highlightLastMove();
+            analyzePosition();
+            playSound('move');
+        }
+
+        function redoMove() {
+            if (currentMoveIndex >= moveHistory.length - 1) return;
+            goToMove(currentMoveIndex + 1);
+            playSound('move');
+        }
+
+        function copyPGN() {
+            const pgn = game.pgn();
+            if (pgn) {
+                navigator.clipboard.writeText(pgn).then(() => {
+                    const btn = $('#btn-copy-pgn');
+                    btn.text('✓ Copied!');
+                    setTimeout(() => btn.text('📋 Copy PGN'), 2000);
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                    alert('PGN:\n' + pgn);
+                });
+            } else {
+                alert('No moves to copy.');
+            }
+        }
+
+        function updateStatus() {
+            let status = '';
+            let moveColor = game.turn() === 'b' ? 'Black' : 'White';
+
+            if (game.in_checkmate()) {
+                const winner = game.turn() === 'b' ? 'White' : 'Black';
+                status = `Checkmate! ${winner} wins!`;
+                $('#game-over-text').text(status);
+                $('#game-over-overlay').addClass('show');
+                playSound('gameover');
+            } else if (game.in_draw()) {
+                if (game.in_stalemate()) {
+                    status = 'Stalemate - Draw';
+                } else if (game.in_threefold_repetition()) {
+                    status = 'Threefold Repetition - Draw';
+                } else if (game.insufficient_material()) {
+                    status = 'Insufficient Material - Draw';
+                } else {
+                    status = 'Draw';
+                }
+                $('#game-over-text').text(status);
+                $('#game-over-overlay').addClass('show');
+                playSound('gameover');
+            } else {
+                status = `${moveColor}'s turn`;
+                if (game.in_check()) {
+                    status += ' (Check!)';
+                }
+                $('#game-over-overlay').removeClass('show');
+            }
+
+            $('#turn-display').text(status);
+        }
+
+        // --- Stockfish Integration ---
+
+        function getSelectedDepth() {
+            return parseInt($('#depth-selector').val()) || 10;
+        }
+
+        function analyzePosition() {
+            if (!stockfish) return;
+            
+            stockfish.postMessage('stop');
+            
+            const fen = game.fen();
+            const depth = getSelectedDepth();
+            stockfish.postMessage('position fen ' + fen);
+            stockfish.postMessage('go depth ' + depth); 
+            
+            $('#eval-display').text('Thinking (d' + depth + ')...');
+        }
+
+        function playBestMove() {
+            if (!bestMove || game.game_over()) {
+                logMessage('No best move available', '#ff6b6b');
+                return;
+            }
+            
+            initAudio();
+            
+            const move = game.move({
+                from: bestMove.from,
+                to: bestMove.to,
+                promotion: 'q'
+            });
+            
+            if (move === null) {
+                logMessage('Best move is invalid', '#ff6b6b');
+                return;
+            }
+            
+            board.position(game.fen());
+            
+            // Truncate future moves if we branched
+            if (currentMoveIndex < moveHistory.length - 1) {
+                moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+            }
+            
+            moveHistory.push(move);
+            currentMoveIndex = moveHistory.length - 1;
+            lastMove = { from: bestMove.from, to: bestMove.to };
+            
+            // Play sound
+            if (move.captured) {
+                playSound('capture');
+            } else {
+                playSound('move');
+            }
+            
+            if (game.in_check()) {
+                playSound('check');
+            }
+            
+            // Clear selection and hints
+            removeMoveHints();
+            $('#board-container .square-55d63').removeClass('highlight-selected');
+            selectedSquare = null;
+            
+            updateStatus();
+            updateMoveHistory();
+            highlightLastMove();
+            
+            // Clear current best move and analyze new position
+            bestMove = null;
+            clearArrow();
+            analyzePosition();
+            
+            logMessage('Played best move: ' + move.san, '#22c55e');
+        }
+
+        function handleEngineMessage(message) {
+            // Only log important messages
+            if (message.startsWith('bestmove') || message.includes('score') || message === 'uciok') {
+                logMessage(message);
+            }
+
+            if (message === 'uciok') {
+                engineStatus.initialized = true;
+                $('#loading-overlay').fadeOut();
+                analyzePosition();
+            }
+
+            if (message.startsWith('bestmove')) {
+                const parts = message.split(' ');
+                const bestMoveStr = parts[1];
+                if (bestMoveStr && bestMoveStr !== '(none)') {
+                    const from = bestMoveStr.substring(0, 2);
+                    const to = bestMoveStr.substring(2, 4);
+                    bestMove = { from, to };
+                    
+                    drawBestMoveArrow();
+                    $('#btn-best-move').addClass('has-move');
+                } else {
+                    $('#btn-best-move').removeClass('has-move');
+                }
+            }
+
+            if (message.startsWith('info') && message.includes('score')) {
+                const scoreParts = message.split('score ')[1].split(' ');
+                const type = scoreParts[0];
+                const value = scoreParts[1];
+                
+                if (type === 'cp') {
+                    let score = parseInt(value) / 100;
+                    
+                    if (game.turn() === 'b') {
+                        score = -score;
+                    }
+                    
+                    const sign = score > 0 ? '+' : '';
+                    $('#eval-display').text(sign + score.toFixed(2));
+                    updateEvalBar(score);
+                } else if (type === 'mate') {
+                    let mateIn = parseInt(value);
+                    if (game.turn() === 'b') {
+                        mateIn = -mateIn;
+                    }
+                    const text = (mateIn > 0 ? '+M' : '-M') + Math.abs(mateIn);
+                    $('#eval-display').text(text);
+                    updateEvalBar(mateIn > 0 ? 10 : -10);
+                }
+            }
+        }
+
+        function updateEvalBar(score) {
+            // Clamp score to -10 to +10 for visual purposes
+            const clampedScore = Math.max(-10, Math.min(10, score));
+            // Convert to percentage (50% = equal, 100% = white winning, 0% = black winning)
+            const percentage = 50 + (clampedScore * 5);
+            
+            $('#eval-bar-fill').css('height', percentage + '%');
+            $('#eval-bar-marker').css('bottom', percentage + '%');
+        }
+
+        // --- Arrow Visualization ---
+        
+        function drawBestMoveArrow() {
+            if (!bestMove) return;
+
+            const canvas = document.getElementById('arrow-layer');
+            const container = document.getElementById('board-container');
+            
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const squareSize = canvas.width / 8;
+            
+            const getSquareCenter = (square) => {
+                const file = square.charCodeAt(0) - 97;
+                const rank = parseInt(square[1]) - 1;
+                
+                let x, y;
+                
+                if (board.orientation() === 'white') {
+                    x = file * squareSize + squareSize / 2;
+                    y = (7 - rank) * squareSize + squareSize / 2;
+                } else {
+                    x = (7 - file) * squareSize + squareSize / 2;
+                    y = rank * squareSize + squareSize / 2;
+                }
+                
+                return { x, y };
+            };
+            
+            const start = getSquareCenter(bestMove.from);
+            const end = getSquareCenter(bestMove.to);
+            
+            drawArrow(ctx, start.x, start.y, end.x, end.y);
+        }
+
+        function clearArrow() {
+            const canvas = document.getElementById('arrow-layer');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            bestMove = null;
+        }
+
+        function drawArrow(ctx, fromX, fromY, toX, toY) {
+            const headLength = 25;
+            const angle = Math.atan2(toY - fromY, toX - fromX);
+            const lineWidth = 14;
+
+            const arrowColor = 'rgba(21, 128, 61, 0.85)';
+            const highlightColor = 'rgba(34, 197, 94, 0.5)';
+
+            const highlightRadius = lineWidth * 2.5; 
+            
+            ctx.beginPath();
+            ctx.fillStyle = highlightColor;
+            ctx.arc(toX, toY, highlightRadius, 0, 2 * Math.PI);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.lineWidth = lineWidth;
+            ctx.strokeStyle = arrowColor;
+            ctx.fillStyle = arrowColor;
+            ctx.lineCap = 'round';
+            
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(toX - headLength * Math.cos(angle - Math.PI / 5), toY - headLength * Math.sin(angle - Math.PI / 5));
+            ctx.lineTo(toX - headLength * Math.cos(angle + Math.PI / 5), toY - headLength * Math.sin(angle + Math.PI / 5));
+            ctx.lineTo(toX, toY);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.fillStyle = arrowColor;
+            ctx.arc(fromX, fromY, lineWidth / 1.5, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+    </script>
+</body>
+</html>
