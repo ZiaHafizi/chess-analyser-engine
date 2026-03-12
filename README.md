@@ -82,3 +82,8 @@ The goal is to create a **simple educational chess analysis tool** that works in
 It is perfect for:
 
 * beginners learning ch
+## Author
+
+Created by ZiaHafizi
+
+GitHub: https://github.com/ZiaHafizi
