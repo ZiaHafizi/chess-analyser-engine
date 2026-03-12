@@ -87,3 +87,5 @@ It is perfect for:
 Created by ZiaHafizi
 
 GitHub: https://github.com/ZiaHafizi
+
+License: MIT
